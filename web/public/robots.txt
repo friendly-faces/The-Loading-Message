@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+Disallow: /message
+Sitemap: https://theloadingmessage.com/sitemap.xml

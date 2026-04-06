@@ -1,0 +1,27 @@
+services:
+  api:
+    build:
+      context: ./api
+    container_name: theloadingmessage-api
+    restart: unless-stopped
+    environment:
+      START_DATE: ${START_DATE}
+      TARGET_DATE: ${TARGET_DATE}
+      # Optional. Leave unset to default to TARGET_DATE in YYYY-MM-DD form.
+      # Set explicitly if TARGET_DATE carries a time component (RFC3339) but
+      # the ciphertext was encrypted with only a date string as the KDF input.
+      ENCRYPT_DATE: ${ENCRYPT_DATE:-}
+      SECRET_KEY: ${SECRET_KEY}
+      PORT: "8080"
+    networks:
+      - traefik-public
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=traefik-public"
+      - "traefik.http.routers.theloadingmessage-api.rule=Host(`api.theloadingmessage.com`)"
+      - "traefik.http.routers.theloadingmessage-api.entrypoints=http"
+      - "traefik.http.services.theloadingmessage-api.loadbalancer.server.port=8080"
+
+networks:
+  traefik-public:
+    external: true

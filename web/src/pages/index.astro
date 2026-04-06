@@ -1,0 +1,142 @@
+---
+import Counter from '../components/Counter.tsx';
+
+const DONATE_URL = import.meta.env.DONATE_URL;
+const API_URL = import.meta.env.PUBLIC_API_URL ?? 'https://api.theloadingmessage.com/';
+---
+
+<!--
+  You found this early.
+  The message isn't ready yet.
+  Neither are you.
+  — E.H., 2026
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='40' fill='%23111'/></svg>" />
+    <meta name="viewport" content="width=device-width" />
+    <title>The Loading Message</title>
+    <meta name="description" content="A single number. A hidden date. A message written in 2026, sealed for centuries." />
+    <meta name="author" content="Elmar Hamelink" />
+    <meta name="keywords" content="durational art, net art, technoromanticism, digital time capsule, conceptual art, internet art, Elmar Hamelink" />
+    <meta property="og:title" content="The Loading Message" />
+    <meta property="og:description" content="A single number. A hidden date. A message written in 2026, sealed for centuries." />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://theloadingmessage.com" />
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content="The Loading Message" />
+    <meta name="twitter:description" content="A single number. A hidden date. A message written in 2026, sealed for centuries." />
+    <link rel="canonical" href="https://theloadingmessage.com" />
+    <script type="application/ld+json" set:html={JSON.stringify({
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "VisualArtwork",
+          "@id": "https://theloadingmessage.com/#work",
+          "name": "The Loading Message",
+          "description": "A message, written by the artist while alive, encrypted and waiting. A single percentage counts forward from 2026. It will reach 100% on a date centuries from now. At that moment — and only that moment — the message appears for the first time.",
+          "artform": ["Net Art", "Technoromanticism", "Durational Art", "Conceptual Art"],
+          "artMedium": ["HTML", "JavaScript", "Encrypted text", "Time"],
+          "dateCreated": "2026",
+          "url": "https://theloadingmessage.com",
+          "creator": {
+            "@type": "Person",
+            "@id": "https://theloadingmessage.com/#elmar",
+            "name": "Elmar Hamelink",
+            "givenName": "Elmar",
+            "familyName": "Hamelink",
+            "nationality": "NL",
+            "url": "https://friendlyfaces.nl",
+            "jobTitle": "Artist, Designer, Founder",
+            "birthPlace": {
+              "@type": "Place",
+              "name": "Netherlands"
+            }
+          },
+          "locationCreated": {
+            "@type": "Place",
+            "name": "Hoofddorp, Netherlands"
+          },
+          "keywords": "durational art, net art, digital time capsule, conceptual art, internet art, Elmar Hamelink",
+          "isAccessibleForFree": true,
+          "inLanguage": "en"
+        }
+      ]
+    })} />
+    <script defer src="https://analytics.friendlyfaces.nl/t.js" data-website-id="bcfc44dd-9141-42e5-aec2-715f56479bcd"></script>
+    <style is:global>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        background: #000;
+        color: #fff;
+        font-family: 'Courier New', Courier, monospace;
+        height: 100dvh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        overflow: hidden;
+      }
+
+      .container {
+        text-align: center;
+      }
+
+      .percentage {
+        font-size: clamp(2rem, 7vw, 6rem);
+        font-weight: bold;
+        letter-spacing: -0.02em;
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
+      }
+
+      .signal-lost {
+        font-size: clamp(1rem, 2.4vw, 1.4rem);
+        opacity: 0.5;
+        font-style: italic;
+        letter-spacing: 0.02em;
+      }
+
+      .message {
+        font-size: clamp(0.9rem, 2.2vw, 1.4rem);
+        width: min(700px, 80vw);
+        margin-inline: auto;
+        line-height: 1.8;
+        text-align: left;
+      }
+
+      .message span {
+        opacity: 0;
+        transition: opacity 0.5s ease-in;
+      }
+
+      .donate {
+        position: fixed;
+        bottom: 2rem;
+        left: 50%;
+        transform: translateX(-50%);
+        color: #888;
+        font-size: 0.75rem;
+        text-decoration: none;
+        letter-spacing: 0.05em;
+        transition: color 0.3s;
+      }
+
+      .donate:hover {
+        color: #666;
+      }
+    </style>
+  </head>
+  <body>
+    <Counter apiUrl={API_URL} client:load />
+
+    {DONATE_URL && (
+      <a class="donate" href={DONATE_URL} target="_blank">support this work</a>
+    )}
+  </body>
+</html>
