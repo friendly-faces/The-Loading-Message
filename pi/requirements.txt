@@ -1,2 +1,0 @@
-# Only needed for standalone mode. Networked mode uses stdlib only.
-cryptography>=42
