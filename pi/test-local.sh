@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
-# One-shot local preview of the offline kiosk build.
+# One-shot local preview of the standalone python kiosk client.
 #
-#   ./pi/test-local.sh           # default: reveal at +20s
-#   ./pi/test-local.sh 5         # reveal in 5 seconds
+#   ./pi/test-local.sh           # default: reveal in 20s
+#   ./pi/test-local.sh 5         # reveal in 5s
 #   ./pi/test-local.sh 0         # already revealed (loops immediately)
-#   ./pi/test-local.sh 60 "my secret message here"
+#   ./pi/test-local.sh 30 "your custom message"
 #
-# Builds web/ in offline mode, encrypts a throwaway message, writes a
-# config.json with a target N seconds in the future, and serves it on
-# http://localhost:8765 .  Ctrl-C to stop.
+# Encrypts a throwaway message with a throwaway key, sets START/TARGET dates
+# in the env, and runs loading_message.py in standalone mode in your current
+# terminal. Ctrl-C to stop.
 set -euo pipefail
 
 SECONDS_AHEAD="${1:-20}"
@@ -16,68 +16,44 @@ MESSAGE="${2:-This is a test of the loading message kiosk.
 
 The percentage climbs from zero to one hundred. When it lands, this text appears, fades, and loops forever — because the kiosk has no refresh button.
 
-Built offline. Decrypted in your browser. Looping for the rest of time.}"
+Built offline. Decrypted in process. Looping for the rest of time.}"
 
 here="$(cd "$(dirname "$0")" && pwd)"
 repo="$(cd "$here/.." && pwd)"
-web="$repo/web"
 
-# Make sure we're on a node version Astro accepts.
-if [ -f "$HOME/.nvm/nvm.sh" ]; then
-  # shellcheck disable=SC1091
-  . "$HOME/.nvm/nvm.sh"
-  nvm use 22 >/dev/null 2>&1 || true
+# cryptography is required for standalone mode. Make sure it's importable.
+if ! python3 -c "import cryptography" >/dev/null 2>&1; then
+  echo "==> installing 'cryptography' (one-time, user site)"
+  python3 -m pip install --user --quiet cryptography
 fi
 
-if ! command -v node >/dev/null || [ "$(node -v | sed 's/v\([0-9]*\).*/\1/')" -lt 22 ]; then
-  echo "need node >= 22 (try: nvm use 22)" >&2
-  exit 1
-fi
+tmp="$(mktemp -d)"
+trap 'rm -rf "$tmp"' EXIT
 
-PM=pnpm
-command -v pnpm >/dev/null || PM=npm
-
-echo "==> building web/ in offline mode"
-( cd "$web" && $PM run build:offline >/dev/null )
-
-dist="$web/dist"
-
-# Encrypt a throwaway message with a throwaway key, just for this preview.
 SECRET="preview-secret-$$"
 TARGET_EPOCH=$(( $(date -u +%s) + SECONDS_AHEAD ))
 TARGET_DATE=$(date -u -d "@$TARGET_EPOCH" +%Y-%m-%dT%H:%M:%SZ)
 ENCRYPT_DATE=$(date -u -d "@$TARGET_EPOCH" +%Y-%m-%d)
-# Use a long simulated span (10 hours back) so the trailing decimals of the
-# 8-digit percentage actually flicker. With a short span, ms resolution only
-# moves the first few digits.
+# Long simulated span so the trailing decimals of the percentage actually
+# move; the standalone source recomputes pct from the wall clock every frame.
 START_DATE=$(date -u -d "10 hours ago" +%Y-%m-%dT%H:%M:%SZ)
 
 echo "==> encrypting throwaway test message"
 ( cd "$repo" && SECRET_KEY="$SECRET" TARGET_DATE="$ENCRYPT_DATE" \
-    OUTPUT="$dist/message.json" \
+    OUTPUT="$tmp/message.json" \
     node scripts/encrypt.mjs "$MESSAGE" >/dev/null )
-
-cat > "$dist/config.json" <<EOF
-{
-  "startDate": "$START_DATE",
-  "targetDate": "$TARGET_DATE",
-  "encryptDate": "$ENCRYPT_DATE",
-  "secret": "$SECRET"
-}
-EOF
-
-PORT=8765
-URL="http://localhost:$PORT"
 
 echo
 echo "================================================================"
-echo "  open: $URL"
 echo "  reveal in: ${SECONDS_AHEAD}s   (target: $TARGET_DATE)"
 echo "  Ctrl-C to stop."
 echo "================================================================"
-echo
+sleep 1
 
-# Try to auto-open in a browser (best effort, harmless if it fails).
-( sleep 1 && (xdg-open "$URL" >/dev/null 2>&1 || true) ) &
-
-cd "$dist" && exec python3 -m http.server "$PORT"
+LOADING_MESSAGE_MODE=standalone \
+MESSAGE_PATH="$tmp/message.json" \
+START_DATE="$START_DATE" \
+TARGET_DATE="$TARGET_DATE" \
+ENCRYPT_DATE="$ENCRYPT_DATE" \
+SECRET_KEY="$SECRET" \
+exec python3 "$here/loading_message.py"

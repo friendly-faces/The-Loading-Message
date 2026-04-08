@@ -1,0 +1,39 @@
+[Unit]
+Description=The Loading Message — standalone terminal client (offline)
+After=network.target
+
+[Service]
+Type=simple
+User=pi
+Group=pi
+
+# Secrets live in a 0600 file outside the repo:
+#   /etc/loading-message/env
+# Required keys:
+#   LOADING_MESSAGE_MODE=standalone
+#   START_DATE=YYYY-MM-DD or RFC3339
+#   TARGET_DATE=YYYY-MM-DD or RFC3339
+#   SECRET_KEY=<the real key>
+#   MESSAGE_PATH=/opt/loading-message/message.json
+# Optional:
+#   ENCRYPT_DATE=<date used at encryption time, defaults to TARGET_DATE>
+EnvironmentFile=/etc/loading-message/env
+
+# Run on tty1, fullscreen, no login prompt, no desktop.
+StandardInput=tty
+StandardOutput=tty
+TTYPath=/dev/tty1
+TTYReset=yes
+TTYVHangup=yes
+TTYVTDisallocate=yes
+
+Environment=TERM=linux
+Environment=PYTHONUNBUFFERED=1
+
+ExecStart=/usr/bin/python3 /opt/loading-message/loading_message.py
+
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

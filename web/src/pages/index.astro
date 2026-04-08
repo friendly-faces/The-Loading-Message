@@ -1,9 +1,7 @@
 ---
 import Counter from '../components/Counter.tsx';
-import OfflineCounter from '../components/OfflineCounter.tsx';
 
-const OFFLINE = import.meta.env.PUBLIC_TLM_MODE === 'offline';
-const DONATE_URL = OFFLINE ? undefined : import.meta.env.DONATE_URL;
+const DONATE_URL = import.meta.env.DONATE_URL;
 const API_URL = import.meta.env.PUBLIC_API_URL ?? 'https://api.theloadingmessage.com/';
 ---
 
@@ -66,9 +64,7 @@ const API_URL = import.meta.env.PUBLIC_API_URL ?? 'https://api.theloadingmessage
         }
       ]
     })} />
-    {!OFFLINE && (
-      <script defer src="https://analytics.friendlyfaces.nl/t.js" data-website-id="bcfc44dd-9141-42e5-aec2-715f56479bcd"></script>
-    )}
+    <script defer src="https://analytics.friendlyfaces.nl/t.js" data-website-id="bcfc44dd-9141-42e5-aec2-715f56479bcd"></script>
     <style is:global>
       * {
         margin: 0;
@@ -137,9 +133,7 @@ const API_URL = import.meta.env.PUBLIC_API_URL ?? 'https://api.theloadingmessage
     </style>
   </head>
   <body>
-    {OFFLINE
-      ? <OfflineCounter client:load />
-      : <Counter apiUrl={API_URL} client:load />}
+    <Counter apiUrl={API_URL} client:load />
 
     {DONATE_URL && (
       <a class="donate" href={DONATE_URL} target="_blank">support this work</a>

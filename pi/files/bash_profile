@@ -1,4 +1,0 @@
-# Auto-start X on tty1 so the kiosk launches at boot.
-if [ -z "${DISPLAY:-}" ] && [ "$(tty)" = "/dev/tty1" ]; then
-  exec startx -- -nocursor
-fi

@@ -1,140 +1,130 @@
-# pi/ — The Loading Message kiosk
+# pi/ — The Loading Message standalone client
 
-A Raspberry Pi Zero W running Raspberry Pi OS Lite, booting straight into
-Chromium kiosk mode showing the offline build of `web/`. Fully offline:
-percentage is computed from the local clock, ciphertext lives on the SD card,
-decryption happens in the browser via WebCrypto, and the message **loops**
-forever once the target moment arrives (because a kiosk has no refresh button).
+A single Python script that turns a Raspberry Pi (or any Linux box with a TTY)
+into a dedicated display for The Loading Message. Renders fullscreen on
+`/dev/tty1` via `curses`, no X server, no Chromium, no display manager. Light
+enough for a Pi Zero 2 W. Designed to coexist with **Pi-hole** on the same Pi.
 
-Designed to coexist with **Pi-hole** on the same Pi. The installer never
-touches lighttpd, dnsmasq, port 80, or any networking config.
+## Modes
 
-## Architecture
+- **standalone** (recommended for the kiosk) — fully offline. Reads
+  `START_DATE`, `TARGET_DATE`, `SECRET_KEY` from `/etc/loading-message/env`,
+  reads the encrypted message from `/opt/loading-message/message.json`,
+  computes the percentage from the local clock every frame, decrypts the
+  message in-process the moment `now >= TARGET_DATE`, and **loops** the
+  reveal forever (a kiosk has no refresh button). Requires the `cryptography`
+  package.
+- **networked** (default if no env is set) — polls the public Go API every
+  10 s, no local secret. Pure stdlib. Useful for testing on a connected box.
 
+## One-shot install on the Pi
+
+```bash
+ssh pi@<pi-host>
+git clone https://github.com/friendly-faces/The-Loading-Message.git ~/loading-message
+cd ~/loading-message/pi
+
+cp local.env.example local.env
+$EDITOR local.env       # set SECRET_KEY, START_DATE, TARGET_DATE
+
+sudo ./setup.sh
+sudo reboot
 ```
-dev machine                         pi (offline)
------------                         -----------
-web/  ──build:offline──▶  pi/dist/  ──rsync──▶  /opt/loading-message/web/
-                            +                       │
-                            config.json (secret)    │
-                            message.json            │
-                                                    ▼
-                                            chromium --kiosk file://…
-```
 
-- `OfflineCounter.tsx` reads `./config.json` + `./message.json` via `fetch()`
-  under `file://` (Chromium is launched with `--allow-file-access-from-files`).
-- The plaintext is held in a component-local ref. Never written to
-  `localStorage`, `document.title`, or any global.
-- After reveal, the message fades out, pauses 5 s, and replays from the top.
+After reboot the Pi boots straight into the percentage on tty1, fullscreen,
+no login prompt, no desktop. `local.env` is git-ignored so the secret never
+leaves the Pi.
+
+`setup.sh` is **idempotent** and safe to re-run. It will:
+
+1. Tear down any leftover Chromium kiosk junk from earlier experiments
+   (`/home/pi/.bash_profile` startx hook, `/home/pi/.xinitrc`, the
+   `getty@tty1` autologin drop-in, `/opt/loading-message/web`).
+2. `apt-get install python3 python3-pip python3-cryptography` (no X, no
+   Chromium, no display manager).
+3. Copy `loading_message.py` and `api/message.json` to `/opt/loading-message/`.
+4. Install `local.env` to `/etc/loading-message/env` as `root:root` `0600`.
+5. Install + enable the `loading-message-standalone.service` systemd unit.
+6. Disable `getty@tty1` so the service can own the TTY.
+7. Print Pi-hole status as a sanity check (it should still be `active`).
+
+The installer never touches Pi-hole's units, lighttpd, dnsmasq, or any
+networking config.
 
 ## Preview locally (dev machine)
 
-One command — builds the offline bundle, encrypts a throwaway test message,
-points the target date a few seconds into the future, and serves it on
-`http://localhost:8765`:
+One command — encrypts a throwaway message with a throwaway key, sets the
+target a few seconds in the future, and runs the script in your terminal:
 
 ```bash
 ./pi/test-local.sh           # reveal in 20s (default)
 ./pi/test-local.sh 5         # reveal in 5s
-./pi/test-local.sh 0         # already revealed, jump straight to the loop
-./pi/test-local.sh 30 "your own test message"
+./pi/test-local.sh 0         # already revealed, jumps straight into the loop
+./pi/test-local.sh 30 "your custom message"
 ```
 
-The percentage climbs, the message reveals at the target moment, fades, and
-loops forever. Ctrl-C to stop. Uses a throwaway secret — your real
-`SECRET_KEY` is never touched.
+The percentage climbs (with all 8 decimals visibly racing — the start date is
+faked to 10 hours ago so the trailing digits actually move), the message
+reveals at the target moment, holds, blanks, and loops forever. Ctrl-C to
+stop. Your real `SECRET_KEY` is never touched.
 
-## Build the bundle (dev machine)
+Auto-installs the `cryptography` pip package the first time if it's missing.
 
-```bash
-cd pi
-./build.sh
-cp dist/config.example.json dist/config.json
-$EDITOR dist/config.json   # set startDate, targetDate, secret
+## Where things live on the Pi
+
+```
+/opt/loading-message/loading_message.py   # the script
+/opt/loading-message/message.json         # encrypted blob (api/message.json)
+/etc/loading-message/env                  # secret + dates, root:root, 0600
+/etc/systemd/system/loading-message-standalone.service
 ```
 
-`dist/` is git-ignored.
+## Configure
 
-`build.sh` runs `npm run build:offline` in `web/`, copies the result and
-`api/message.json` into `pi/dist/`, and grep-scans the bundled JS for
-secret-shaped strings as a leak guard.
+Anything in the script can be overridden via the env file:
 
-## Install on the Pi (preserves Pi-hole)
+| Variable | Default | Mode | Purpose |
+| --- | --- | --- | --- |
+| `LOADING_MESSAGE_MODE` | `networked` | both | `networked` or `standalone` |
+| `MESSAGE_PATH` | `/opt/loading-message/message.json` | standalone | encrypted JSON file |
+| `START_DATE` | (required) | standalone | YYYY-MM-DD or RFC 3339 |
+| `TARGET_DATE` | (required) | standalone | unlock moment |
+| `ENCRYPT_DATE` | = `TARGET_DATE` as YYYY-MM-DD | standalone | KDF passphrase date |
+| `SECRET_KEY` | (required) | standalone | the real secret |
+| `LOADING_MESSAGE_API_URL` | `https://api.theloadingmessage.com/` | networked | API root |
+| `LOADING_MESSAGE_POLL_INTERVAL` | `10` | networked | seconds between polls |
 
-Fresh Raspberry Pi OS Lite, Pi-hole already installed, SSH key access set up.
-
-```bash
-# from the dev machine, ship the bundle
-rsync -a pi/dist/ pi@<pi-host>:/tmp/loading-message-dist/
-rsync -a pi/install.sh pi/files/ pi@<pi-host>:/tmp/loading-message-installer/
-
-# on the pi
-ssh pi@<pi-host>
-sudo /tmp/loading-message-installer/install.sh /tmp/loading-message-dist
-sudo reboot
-```
-
-The installer:
-
-1. `apt-get install --no-install-recommends xserver-xorg x11-xserver-utils
-   xinit chromium-browser unclutter rsync` — no desktop, no display manager.
-2. rsyncs the bundle to `/opt/loading-message/web/` and `chmod 600`s
-   `config.json` (owned by `pi`).
-3. Drops `/home/pi/.bash_profile` (auto-`startx` on tty1) and
-   `/home/pi/.xinitrc` (chromium kiosk).
-4. Adds a `getty@tty1` drop-in for autologin as `pi`. Pi-hole's units are
-   untouched.
-
-After `sudo reboot` the Pi comes up directly into fullscreen Chromium showing
-the percentage.
-
-## Where the secret lives
-
-`/opt/loading-message/web/config.json`, `chmod 600`, owned by `pi`.
-
-```json
-{
-  "startDate": "2026-01-01T00:00:00Z",
-  "targetDate": "2226-01-01T00:00:00Z",
-  "encryptDate": "2226-01-01",
-  "secret": "the-real-key"
-}
-```
-
-Anyone with physical access to the SD card can extract this file. The kiosk
-threat model assumes the Pi is sealed inside the artwork enclosure.
+The animation constants (`WORD_DELAY`, `PARAGRAPH_PAUSE`, `END_HOLD`,
+`LOOP_PAUSE`, `BLINK_INTERVAL`) are still source-level — edit
+`loading_message.py` if you want to tune them.
 
 ## Lockdown
 
-- Set a strong password for `pi`, disable password SSH (`PasswordAuthentication no`),
+- Strong password for `pi`. Disable password SSH (`PasswordAuthentication no`),
   keep only your key.
-- Optional: `sudo raspi-config` → "Performance Options" → enable read-only
-  root (`overlayfs`). Test Pi-hole still works after — Pi-hole writes to
-  `/etc/pihole`, which needs to be excluded from the overlay or moved to a
-  writable partition. Do this **after** you've verified the kiosk boots.
-- Optional: `xmodmap -e "keycode 9 ="` in `.xinitrc` to disable Escape if you
-  want extra paranoia. Chromium kiosk already blocks `Ctrl+W` / `Alt+F4`.
+- The service runs as the unprivileged `pi` user; the env file with the
+  secret is `root:root 0600` and only sourced by systemd.
+- Anyone with physical access to the SD card can extract the secret. Threat
+  model assumes the Pi is sealed inside the artwork enclosure.
 
 ## Clock caveat
 
-The Pi Zero W has no RTC and (in this setup) no internet, so it cannot reach
-NTP. Standalone mode trusts the system clock — a wrong clock means a wrong
-unlock date. Add a DS3231 hardware RTC and configure `hwclock` /
-`fake-hwclock` to honour it if you care about hitting the target moment
-correctly years from now.
+The Pi Zero 2 W has no RTC and (in this setup) no internet, so it cannot
+reach NTP. Standalone mode trusts the system clock — a wrong clock means a
+wrong unlock date. Add a DS3231 hardware RTC and configure
+`hwclock` / `fake-hwclock` to honour it if you care about hitting the target
+moment correctly years from now.
 
 ## Files
 
 ```
 pi/
-├── test-local.sh                  # dev-machine: one-shot local preview
-├── build.sh                       # dev-machine: build pi/dist/
-├── install.sh                     # on the pi: deploy + configure kiosk
-├── files/
-│   ├── bash_profile               # → /home/pi/.bash_profile
-│   ├── xinitrc                    # → /home/pi/.xinitrc
-│   └── getty-autologin.conf       # → /etc/systemd/system/getty@tty1.service.d/
-├── dist/                          # git-ignored, produced by build.sh
+├── setup.sh                              # on the Pi: one-shot installer
+├── test-local.sh                         # dev machine: local preview
+├── loading_message.py                    # the client
+├── loading-message.service               # networked-mode systemd unit
+├── loading-message-standalone.service    # standalone-mode systemd unit
+├── requirements.txt                      # cryptography (only for standalone)
+├── local.env.example                     # copy to local.env, fill in
 └── README.md
 ```
